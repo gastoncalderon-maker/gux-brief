@@ -1,7 +1,0 @@
-{
-  "name": "gux-brief",
-  "version": "1.0.0",
-  "dependencies": {
-    "resend": "^3.2.0"
-  }
-}
