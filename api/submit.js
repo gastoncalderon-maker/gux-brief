@@ -1,1 +1,119 @@
+const { Resend } = require('resend');
 
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+module.exports = async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const data = req.body;
+
+  const tipoColores = {
+    'Integración':      '#EF9F27',
+    'Plataforma / App': '#534AB7',
+    'Sitio web':        '#1D9E75',
+    'Licitación':       '#D85A30',
+  };
+
+  const color = tipoColores[data.tipo] || '#534AB7';
+  const tieneAlertas = data.alertas && !data.alertas.startsWith('✅');
+
+  const alertasHTML = tieneAlertas
+    ? data.alertas.split('\n').map(function(a) {
+        const isRed = a.startsWith('🔴');
+        const bg = isRed ? '#FCEBEB' : '#FAEEDA';
+        const border = isRed ? '#F09595' : '#FAC775';
+        const text = isRed ? '#791F1F' : '#633806';
+        return '<div style="background:' + bg + ';border-left:3px solid ' + border + ';padding:10px 14px;border-radius:0 6px 6px 0;margin-bottom:8px;font-size:13px;color:' + text + ';line-height:1.5">' + a + '</div>';
+      }).join('')
+    : '<div style="background:#EAF3DE;border-left:3px solid #639922;padding:10px 14px;border-radius:0 6px 6px 0;font-size:13px;color:#27500A">✅ Sin alertas críticas detectadas.</div>';
+
+  function row(label, value) {
+    if (!value || value === '—') return '';
+    return '<tr><td style="padding:10px 0;border-bottom:1px solid #F1EFE8;width:38%;vertical-align:top"><span style="font-size:12px;color:#888780;font-weight:500">' + label + '</span></td><td style="padding:10px 0 10px 16px;border-bottom:1px solid #F1EFE8;vertical-align:top"><span style="font-size:13px;color:#1C1C1A;line-height:1.5;white-space:pre-wrap">' + value + '</span></td></tr>';
+  }
+
+  function seccion(titulo, filas) {
+    const contenido = filas.join('');
+    if (!contenido.trim()) return '';
+    return '<div style="margin-bottom:24px"><h3 style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#888780;margin:0 0 8px;padding-bottom:8px;border-bottom:2px solid #F1EFE8">' + titulo + '</h3><table style="width:100%;border-collapse:collapse">' + contenido + '</table></div>';
+  }
+
+  var seccionEspecifica = '';
+
+  if (data.tipo === 'Integración') {
+    seccionEspecifica = seccion('Integración', [
+      row('Sistemas a integrar', data.sistemas),
+      row('Estado de la API', data.api),
+      row('Quién sabe del sistema', data.api_quien),
+      row('Tipo de sincronización', data.sync),
+      row('Migración de datos', data.migracion),
+      row('Detalle migración', data.migracion_det),
+    ]);
+  } else if (data.tipo === 'Plataforma / App') {
+    seccionEspecifica = seccion('Plataforma / App', [
+      row('Flujos principales', data.flujos),
+      row('Roles / permisos', data.roles),
+      row('Descripción de roles', data.roles_det),
+      row('Funcionalidades complejas', data.complejidad),
+      row('Sistemas conectados', data.sistemas_plat),
+    ]);
+  } else if (data.tipo === 'Sitio web') {
+    seccionEspecifica = seccion('Sitio web', [
+      row('Tipo de sitio', data.web_tipo),
+      row('Gestión de contenido', data.cms),
+      row('Activos disponibles', data.web_activos),
+      row('SEO / rendimiento', data.seo),
+    ]);
+  } else if (data.tipo === 'Licitación') {
+    seccionEspecifica = seccion('Licitación', [
+      row('Estado de bases', data.bases),
+      row('Plazo disponible', data.plazo),
+      row('Sistema legado', data.legado),
+      row('Contraparte técnica', data.contraparte),
+      row('Requisitos técnicos', data.sla),
+    ]);
+  }
+
+  var htmlBody = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;padding:0;background:#F8F8F6;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif">'
+    + '<div style="max-width:640px;margin:0 auto;padding:32px 16px">'
+    + '<div style="background:' + color + ';border-radius:12px 12px 0 0;padding:24px 28px 20px">'
+    + '<div style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:rgba(255,255,255,0.7);margin-bottom:6px">Brief Comercial · GUX</div>'
+    + '<div style="font-size:22px;font-weight:600;color:white;letter-spacing:-0.01em">' + (data.tipo || '') + '</div>'
+    + '<div style="font-size:14px;color:rgba(255,255,255,0.85);margin-top:4px">' + (data.cliente || 'Cliente sin nombre') + '</div>'
+    + '</div>'
+    + '<div style="background:white;padding:28px;border-radius:0 0 12px 12px;border:1px solid #E8E6DF;border-top:none">'
+    + '<div style="margin-bottom:24px"><h3 style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#888780;margin:0 0 10px">Alertas detectadas</h3>' + alertasHTML + '</div>'
+    + seccion('Contexto del cliente', [
+        row('Problema de negocio', data.problema),
+        row('Usuarios', data.usuarios),
+        row('Plataformas', data.plataformas),
+        row('Documentación existente', data.docs),
+        row('Fecha / razón', data.fecha),
+      ])
+    + seccionEspecifica
+    + seccion('Contexto de la reunión', [
+        row('Decisor técnico', data.decisor),
+        row('Madurez técnica', data.madurez),
+        row('Observaciones', data.observaciones),
+      ])
+    + '</div>'
+    + '<div style="text-align:center;padding:20px 0 0;font-size:11px;color:#B4B2A9">Enviado desde brief.gux.tech</div>'
+    + '</div></body></html>';
+
+  try {
+    await resend.emails.send({
+      from: 'GUX Brief <onboarding@resend.dev>',
+      to: ['gaston.calderon@gux.tech'],
+      subject: '[Brief] ' + (data.tipo || '') + ' — ' + (data.cliente || 'Sin nombre') + (tieneAlertas ? ' ⚠️' : ' ✅'),
+      html: htmlBody,
+    });
+
+    return res.status(200).json({ ok: true });
+
+  } catch (error) {
+    console.error('Error enviando email:', error);
+    return res.status(500).json({ error: 'Error enviando email' });
+  }
+};
